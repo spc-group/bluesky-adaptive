@@ -23,6 +23,12 @@ from .recommendations import NoRecommendation, RequestPause
 from .utils import extract_event_page
 
 
+class _Missing:
+    pass
+
+MISSING = _Missing()
+
+
 def recommender_factory(recommender, independent_keys, dependent_keys, *, max_count=10, queue=None):
     """
     Generate the callback and queue for recommender agent integration.
@@ -67,9 +73,22 @@ def recommender_factory(recommender, independent_keys, dependent_keys, *, max_co
     if queue is None:
         queue = Queue()
 
-    # TODO handle multi-stream runs!
+    # For handling multi-stream runs
+    descriptor = {
+        "uid": MISSING,
+    }
+
     def callback(name, doc):
-        if name == "event_page":
+        if name == "descriptor":
+            data_keys = set(doc['data_keys'].keys())
+            our_keys = {*independent_keys, *dependent_keys}
+            print(data_keys, our_keys)
+            if data_keys == our_keys:
+                descriptor['uid'] = doc['uid']
+        if descriptor['uid'] is MISSING:
+            # We haven't seen the descriptor for this stream yet
+            return
+        elif name == "event_page" and doc['descriptor'] == descriptor['uid']:
             if doc["seq_num"][-1] > max_count:
                 # if at max number of points poison the queue and return early
                 queue.put(None)
